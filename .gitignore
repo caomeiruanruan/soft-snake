@@ -1,0 +1,14 @@
+﻿__pycache__/
+logs/
+last_move.json
+move.json
+replay.json
+r3.json
+v1.json
+v2.json
+v3.json
+gh.json
+gh_core.py.json
+gh_server.py.json
+remote_core.py
+*.bak

@@ -1,0 +1,5 @@
+battlesnake 在 http://127.0.0.1:8095   (Ctrl+C 停)
+  外观: {"apiversion": "1", "author": "soft", "color": "#7C9CF5", "head": "default", "tail": "default", "version": "0.1.0"}
+  公网测试时把 cloudflared 给的地址填到 battlesnake 的 create game 里
+[21:24:27] "POST /move HTTP/1.1" 200 -
+[21:24:27] "GET / HTTP/1.1" 200 -

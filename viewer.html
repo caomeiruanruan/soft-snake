@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>小洄的蛇 · 回放</title>
+<style>
+  :root{
+    --bg:#0E1016; --panel:#151A26; --line:rgba(255,255,255,.08);
+    --text:#E9EDF5; --dim:#8A93A6; --me:#7C9CF5; --foe:#F5A9C0; --food:#F2C94C;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+       font:15px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif;
+       display:flex;justify-content:center;padding:24px}
+  .wrap{display:flex;gap:24px;align-items:flex-start}
+  canvas{background:var(--panel);border-radius:16px;border:1px solid var(--line)}
+  .side{width:260px}
+  h1{font-size:17px;margin:0 0 4px}
+  .sub{color:var(--dim);font-size:12px;margin-bottom:14px}
+  .row{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--line);font-size:13px}
+  .row b{font-weight:600}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:1px}
+  .bar{height:6px;border-radius:3px;background:rgba(255,255,255,.1);margin-top:4px;overflow:hidden}
+  .bar>i{display:block;height:100%;border-radius:3px}
+  .ctrl{display:flex;gap:8px;margin-top:16px;align-items:center}
+  button{background:var(--me);color:#fff;border:0;border-radius:10px;padding:8px 14px;
+         font-size:13px;font-weight:600;cursor:pointer}
+  button.ghost{background:rgba(255,255,255,.08)}
+  input[type=range]{flex:1;accent-color:var(--me)}
+  .banner{margin-top:14px;padding:10px 12px;border-radius:12px;font-size:13px;
+          background:rgba(124,156,245,.14);border:1px solid rgba(124,156,245,.3)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <canvas id="cv" width="484" height="484"></canvas>
+  <div class="side">
+    <h1>小洄的蛇</h1>
+    <div class="sub" id="seedline"></div>
+
+    <div class="row"><span><i class="dot" style="background:var(--me)"></i><b>小洄</b></span><span id="meinfo"></span></div>
+    <div class="bar"><i id="mehp" style="background:var(--me)"></i></div>
+
+    <div class="row" style="margin-top:10px"><span><i class="dot" style="background:var(--foe)"></i><b>对手</b></span><span id="foeinfo"></span></div>
+    <div class="bar"><i id="foehp" style="background:var(--foe)"></i></div>
+
+    <div class="row"><span>回合</span><span id="turn"></span></div>
+    <div class="row"><span>食物</span><span id="food"></span></div>
+
+    <div class="ctrl">
+      <button id="play">暂停</button>
+      <button class="ghost" id="prev">‹</button>
+      <button class="ghost" id="next">›</button>
+    </div>
+    <div class="ctrl"><input type="range" id="seek" min="0" max="0" value="0"></div>
+    <div class="banner" id="banner" style="display:none"></div>
+  </div>
+</div>
+<script src="replay.js"></script>
+<script>
+const R = window.REPLAY;
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const PAD = 22, N = R.w, CELL = (cv.width - PAD * 2) / N;
+let i = 0, timer = null, playing = true;
+
+document.getElementById('seedline').textContent = 'seed ' + R.seed + ' · ' + (R.frames.length - 1) + ' 帧';
+document.getElementById('seek').max = R.frames.length - 1;
+
+const xy = (x, y) => [PAD + x * CELL, PAD + y * CELL];
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+function draw() {
+  const f = R.frames[i];
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  // 网格
+  ctx.strokeStyle = 'rgba(255,255,255,.045)';
+  ctx.lineWidth = 1;
+  for (let g = 0; g <= N; g++) {
+    ctx.beginPath(); ctx.moveTo(PAD + g * CELL, PAD); ctx.lineTo(PAD + g * CELL, PAD + N * CELL); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(PAD, PAD + g * CELL); ctx.lineTo(PAD + N * CELL, PAD + g * CELL); ctx.stroke();
+  }
+
+  // 食物
+  for (const [fx, fy] of f.food) {
+    const [px, py] = xy(fx, fy);
+    ctx.fillStyle = 'var(--food)';
+    ctx.fillStyle = '#F2C94C';
+    ctx.beginPath();
+    ctx.arc(px + CELL / 2, py + CELL / 2, CELL * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 两条蛇
+  const colors = { me: '#7C9CF5', foe: '#F5A9C0' };
+  for (const s of f.snakes) {
+    const c = colors[s.id] || '#888';
+    const body = s.body;
+    for (let k = body.length - 1; k >= 0; k--) {
+      const [x, y] = body[k];
+      const [px, py] = xy(x, y);
+      const t = k / Math.max(1, body.length - 1);
+      ctx.globalAlpha = s.alive ? (1 - t * 0.45) : 0.28;
+      ctx.fillStyle = c;
+      roundRect(px + 2, py + 2, CELL - 4, CELL - 4, k === 0 ? 7 : 5);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 眼睛
+    if (body.length) {
+      const [hx, hy] = body[0];
+      const [px, py] = xy(hx, hy);
+      ctx.fillStyle = '#0E1016';
+      const ex = px + CELL / 2, ey = py + CELL / 2;
+      ctx.beginPath(); ctx.arc(ex - CELL * 0.16, ey, CELL * 0.07, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.arc(ex + CELL * 0.16, ey, CELL * 0.07, 0, 7); ctx.fill();
+    }
+  }
+
+  // 侧栏
+  const me = f.snakes.find(s => s.id === 'me');
+  const foe = f.snakes.find(s => s.id === 'foe');
+  document.getElementById('meinfo').textContent =
+    'len ' + me.body.length + (me.alive ? '' : ' · ' + me.death);
+  document.getElementById('foeinfo').textContent =
+    'len ' + foe.body.length + (foe.alive ? '' : ' · ' + foe.death);
+  document.getElementById('mehp').style.width = Math.max(0, me.health) + '%';
+  document.getElementById('foehp').style.width = Math.max(0, foe.health) + '%';
+  document.getElementById('turn').textContent = f.turn;
+  document.getElementById('food').textContent = f.food.length;
+  document.getElementById('seek').value = i;
+
+  const banner = document.getElementById('banner');
+  if (f.winner) {
+    banner.style.display = 'block';
+    const name = f.winner === 'me' ? '小洄赢了' : (f.winner === 'foe' ? '对手赢了' : '同归于尽');
+    banner.textContent = '第 ' + f.turn + ' 回合结束 · ' + name;
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+function tick() {
+  if (i < R.frames.length - 1) { i++; draw(); }
+  else { playing = false; document.getElementById('play').textContent = '重播'; }
+}
+
+document.getElementById('play').onclick = () => {
+  if (i >= R.frames.length - 1) i = 0;
+  playing = !playing;
+  document.getElementById('play').textContent = playing ? '暂停' : '播放';
+  if (playing && !timer) timer = setInterval(tick, 120);
+  if (!playing) { clearInterval(timer); timer = null; }
+};
+document.getElementById('next').onclick = () => { i = Math.min(R.frames.length - 1, i + 1); draw(); };
+document.getElementById('prev').onclick = () => { i = Math.max(0, i - 1); draw(); };
+document.getElementById('seek').oninput = e => { i = +e.target.value; draw(); };
+
+if (R.frames.length > 400) i = 0;
+else i = Math.min(60, R.frames.length - 1);
+draw();
+timer = setInterval(tick, 120);
+</script>
+</body>
+</html>
