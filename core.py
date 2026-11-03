@@ -1,0 +1,122 @@
+"""Battlesnake 决策核心：不依赖任何第三方库，arena.py 和 server.py 共用。"""
+import random
+
+DIRS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
+OPP = {"up": "down", "down": "up", "left": "right", "right": "left"}
+
+
+def _pts(body):
+    if not body:
+        return []
+    if isinstance(body[0], dict):
+        return [(p["x"], p["y"]) for p in body]
+    return [tuple(p) for p in body]
+
+
+def neighbors(p, w, h):
+    out = []
+    for d, (dx, dy) in DIRS.items():
+        n = (p[0] + dx, p[1] + dy)
+        if 0 <= n[0] < w and 0 <= n[1] < h:
+            out.append((d, n))
+    return out
+
+
+def flood_size(start, blocked, w, h, cap=200):
+    """从 start 能走到的空格数量，用来判断会不会把自己闷死。"""
+    seen = {start}
+    stack = [start]
+    while stack and len(seen) < cap:
+        c = stack.pop()
+        for _, n in neighbors(c, w, h):
+            if n in seen or n in blocked:
+                continue
+            seen.add(n)
+            stack.append(n)
+    return len(seen)
+
+
+def choose_move(board, me_name):
+    w, h = board["width"], board["height"]
+    snakes = board["snakes"]
+    me = None
+    for s in snakes:
+        if s["name"] == me_name:
+            me = s
+            break
+    if me is None:
+        return "up"
+
+    mybody = _pts(me["body"])
+    head = mybody[0]
+    mylen = len(mybody)
+    health = me.get("health", 100)
+
+    blocked = set()
+    enemy_heads = []
+    for s in snakes:
+        b = _pts(s["body"])
+        if not b:
+            continue
+        if s["name"] == me_name:
+            for p in b[:-1]:          # 自己的尾巴下一回合会让出来
+                blocked.add(p)
+        else:
+            for p in b[:-1]:
+                blocked.add(p)
+            enemy_heads.append((b[0], len(b)))
+
+    food = {(f["x"], f["y"]) for f in board.get("food", [])}
+
+    # 对面下一回合能到的格子 → 那一格里，能过来的最长的是谁
+    enemy_reach = {}
+    for eh, elen in enemy_heads:
+        for _, p in neighbors(eh, w, h):
+            if elen > enemy_reach.get(p, -1):
+                enemy_reach[p] = elen
+
+    best = None
+    for d, n in neighbors(head, w, h):
+        if n in blocked:
+            continue
+
+        sc = 0.0
+
+        # 1) 撞头风险：贴脸（相距 1）或者对面一步能冲进这一格，都算
+        for eh, elen in enemy_heads:
+            if elen >= mylen and (abs(eh[0] - n[0]) + abs(eh[1] - n[1]) <= 1 or n in enemy_reach):
+                sc -= 100000
+
+        # 2) 空间：走进去还剩多少格可活
+        room = flood_size(n, blocked | {n}, w, h, cap=w * h)
+        sc += room * 12
+        if room < mylen + 2:
+            sc -= 500
+
+        # 3) 食物：越饿越想吃
+        if n in food:
+            sc += 60 + (100 - health) * 1.2
+        elif food:
+            best_fd = min(abs(n[0] - f[0]) + abs(n[1] - f[1]) for f in food)
+            sc -= best_fd * 1.5
+
+        # 4) 别原地打转（钻自己脖子）
+        if len(mybody) > 1 and n == mybody[1]:
+            sc -= 300
+
+        # 5) 轻微靠中，减少贴墙
+        sc -= (abs(n[0] - w // 2) + abs(n[1] - h // 2)) * 0.6
+
+        sc += random.random() * 0.01
+
+        if best is None or sc > best[0]:
+            best = (sc, d)
+
+    if best is not None and best[0] > -5000:
+        return best[1]
+
+    # 全员死路：挑一个不出界的方向，活久一点是一点
+    safe = [d for d, _ in neighbors(head, w, h)]
+    if safe:
+        return random.choice(safe)
+    return "up"

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: soft-snake
+    runtime: python
+    plan: free
+    region: oregon
+    buildCommand: "echo no-deps"
+    startCommand: "python server.py --port $PORT"
+    healthCheckPath: /
