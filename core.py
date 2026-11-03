@@ -70,12 +70,11 @@ def choose_move(board, me_name):
 
     # blocked      = 尾巴也算墙（这一回合吃了东西，尾巴不会让开）
     # blocked_free = 尾巴不算墙（这一回合没吃，尾巴会让开）
-    # 规则（官方 docs）：先挪头、再撤尾，因此「没吃东西时钻自己尾巴」是合法的；
-    # 但这一回合吃了东西，尾巴会被补上、不算腾空 —— 那就不能钻。
+    # 实测证据（2026-11-03 两局，黑匣子记录）：把尾巴那一格当空格钻进去，
+    # 引擎判 self-collision —— 即使下一回合尾巴会腾开也一样。
+    # 所以两套一律把整条身体当墙，绝不钻自己，尾巴也不例外。
     blocked = set(all_cells)
     blocked_free = set(all_cells)
-    if my_tail is not None:
-        blocked_free.discard(my_tail)
 
     # 对面下一回合能到的格子 → 那一格里，能过来的最长的是谁
     enemy_reach = {}
