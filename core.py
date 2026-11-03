@@ -70,6 +70,8 @@ def choose_move(board, me_name):
 
     # blocked      = 尾巴也算墙（这一回合吃了东西，尾巴不会让开）
     # blocked_free = 尾巴不算墙（这一回合没吃，尾巴会让开）
+    # 规则（官方 docs）：先挪头、再撤尾，因此「没吃东西时钻自己尾巴」是合法的；
+    # 但这一回合吃了东西，尾巴会被补上、不算腾空 —— 那就不能钻。
     blocked = set(all_cells)
     blocked_free = set(all_cells)
     if my_tail is not None:

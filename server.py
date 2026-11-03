@@ -9,6 +9,7 @@
 本地测试：http://127.0.0.1:8000
 给官方平台用：需要公网 HTTPS 地址（cloudflared / 部署到云）
 """
+import hashlib
 import json
 import os
 import sys
@@ -17,16 +18,26 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from core import choose_move
 
+CORE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "core.py")
+try:
+    with open(CORE_PATH, "rb") as _fh:
+        CORE_SHA = hashlib.sha256(_fh.read()).hexdigest()[:12]
+except Exception:
+    CORE_SHA = "unknown"
+
 META = {
     "apiversion": "1",
     "author": "soft",
     "color": "#7C9CF5",
     "head": "default",
     "tail": "default",
-    "version": "0.1.0",
+    "version": "0.1.1",
 }
 
 MOVE_LIMIT_MS = 500.0
+
+# 最近一次决策的快照，方便出事后回看「我到底看见了什么」
+LAST = {}
 
 # 调试用：打开后每步把收到的棋盘原样落到 last_move.json
 DUMP = False
@@ -59,8 +70,16 @@ class Handler(BaseHTTPRequestHandler):
             return {}
 
     def do_GET(self):
-        if self.path.split("?")[0] in ("/", ""):
+        path = self.path.split("?")[0]
+        if path in ("/", ""):
             self._send(META)
+        elif path == "/diag":
+            self._send({
+                "version": META["version"],
+                "core_sha": CORE_SHA,
+                "move_limit_ms": MOVE_LIMIT_MS,
+                "last": LAST,
+            })
         else:
             self._send({"error": "not found"}, 404)
 
@@ -89,6 +108,19 @@ class Handler(BaseHTTPRequestHandler):
                 move = "up"
             if move not in ("up", "down", "left", "right"):
                 move = "up"
+            try:
+                yb = (data.get("you") or {}).get("body") or []
+                LAST.clear()
+                LAST.update({
+                    "turn": data.get("turn"),
+                    "move": move,
+                    "head": yb[0] if yb else None,
+                    "tail": yb[-1] if yb else None,
+                    "body_len": len(yb),
+                    "food": sorted((f.get("x"), f.get("y")) for f in board.get("food", [])),
+                })
+            except Exception:
+                pass
             ms = (time.time() - t0) * 1000.0
             if ms > MOVE_LIMIT_MS:
                 sys.stderr.write("SLOW %.0fms\n" % ms)
