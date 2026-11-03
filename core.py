@@ -52,21 +52,28 @@ def choose_move(board, me_name):
     mylen = len(mybody)
     health = me.get("health", 100)
 
-    blocked = set()
+    food = {(f["x"], f["y"]) for f in board.get("food", [])}
+
+    # 所有蛇身占的格子（含尾巴）
+    all_cells = set()
+    my_tail = None
     enemy_heads = []
     for s in snakes:
         b = _pts(s["body"])
         if not b:
             continue
+        all_cells.update(b)
         if s["name"] == me_name:
-            for p in b[:-1]:          # 自己的尾巴下一回合会让出来
-                blocked.add(p)
+            my_tail = b[-1] if len(b) > 2 else None
         else:
-            for p in b[:-1]:
-                blocked.add(p)
             enemy_heads.append((b[0], len(b)))
 
-    food = {(f["x"], f["y"]) for f in board.get("food", [])}
+    # blocked      = 尾巴也算墙（这一回合吃了东西，尾巴不会让开）
+    # blocked_free = 尾巴不算墙（这一回合没吃，尾巴会让开）
+    blocked = set(all_cells)
+    blocked_free = set(all_cells)
+    if my_tail is not None:
+        blocked_free.discard(my_tail)
 
     # 对面下一回合能到的格子 → 那一格里，能过来的最长的是谁
     enemy_reach = {}
@@ -77,7 +84,8 @@ def choose_move(board, me_name):
 
     best = None
     for d, n in neighbors(head, w, h):
-        if n in blocked:
+        blk = blocked if n in food else blocked_free
+        if n in blk:
             continue
 
         sc = 0.0
@@ -88,7 +96,7 @@ def choose_move(board, me_name):
                 sc -= 100000
 
         # 2) 空间：走进去还剩多少格可活
-        room = flood_size(n, blocked | {n}, w, h, cap=w * h)
+        room = flood_size(n, blk | {n}, w, h, cap=w * h)
         sc += room * 12
         if room < mylen + 2:
             sc -= 500
