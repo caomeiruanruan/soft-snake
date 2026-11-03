@@ -98,9 +98,10 @@ def choose_move(board, me_name):
 
         # 2) 空间：走进去还剩多少格可活
         room = flood_size(n, blk | {n}, w, h, cap=w * h)
-        sc += room * 12
         if room < mylen + 2:
-            sc -= 500
+            # 进去就是死口袋：要早躲，别等到被围住才发现
+            sc -= 8000
+        sc += min(room, mylen * 6) * 12
 
         # 3) 食物：越饿越想吃
         if n in food:
@@ -124,8 +125,11 @@ def choose_move(board, me_name):
     if best is not None and best[0] > -5000:
         return best[1]
 
-    # 全员死路：挑一个不出界的方向，活久一点是一点
-    safe = [d for d, _ in neighbors(head, w, h)]
-    if safe:
-        return random.choice(safe)
+    # 真被围死了：先挑没被身体占住的、活得最久的那格；一格都没有才随便走
+    free_moves = [(d, n) for d, n in neighbors(head, w, h) if n not in blocked_free]
+    if free_moves:
+        return max(free_moves, key=lambda t: flood_size(t[1], blocked_free | {t[1]}, w, h, cap=w * h))[0]
+    any_moves = [d for d, _ in neighbors(head, w, h)]
+    if any_moves:
+        return random.choice(any_moves)
     return "up"
