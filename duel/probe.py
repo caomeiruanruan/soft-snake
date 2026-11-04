@@ -145,9 +145,12 @@ def eval_move(move, me, others, food, w, h):
     blocked_tail = set(blocked)
     for s in [me] + others:
         blocked_tail.discard(key(*s["body"][-1]))
-    legal = inb(nx, ny, w, h) and key(nx, ny) not in blocked
+    # 官方规则：每回合结束时所有蛇的尾巴都会让开（吃到食物的那条除外），
+    # 所以「走进尾巴」是合法的。只有「也吃到食物」时尾巴不动，才真撞上。
+    legal = inb(nx, ny, w, h) and key(nx, ny) not in blocked_tail
     if not legal:
         return {"move": move, "legal": False, "space": 0, "fdist": 99, "head_gap": 99}
+    tail_risk = any(key(nx, ny) == key(*s["body"][-1]) and key(nx, ny) in food for s in others)
     oh = [s["body"][0] for s in others]
     head_gap = min((abs(nx - o[0]) + abs(ny - o[1]) for o in oh), default=99)
     return {
@@ -156,6 +159,7 @@ def eval_move(move, me, others, food, w, h):
         "space": flood(nx, ny, blocked_tail, w, h),
         "fdist": food_steps(nx, ny, blocked_tail, food, w, h),
         "head_gap": head_gap,
+        "tail_risk": tail_risk,
     }
 
 

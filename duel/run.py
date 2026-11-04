@@ -84,6 +84,11 @@ def main(argv=None):
     _check(ap, args)
 
     step_ms = 500.0 if args.real else float(args.step_ms)
+    if step_ms < 200 and not args.real:
+        # 实测教训（2026-11-04）：预算给 50ms 时，本机跑 3-4 个 worker 会让 py 玩家
+        # 偶发超预算 → 引擎判「直行」→ 本来会赢的局直接输。样本会整体下偏 20-30 个百分点。
+        print("提示：--step-ms %.0f 偏小，py 玩家偶发超过预算会被判直行，"
+              "胜率样本会失真；对比实验建议 300+ 或 --real" % step_ms)
     specs = [args.a, args.b]
     if args.snakes == 4:
         specs += [args.c or args.a, args.d or args.b]
