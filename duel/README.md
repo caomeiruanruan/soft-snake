@@ -59,3 +59,27 @@ python -m duel.run --a py:..\core.py --b replay:<game_id>:<蛇名> --games 50 --
 ```bash
 python -m duel.selftest 40   # 两套策略 x 40 局和 arena.run_game 对拍 + 确定性
 ```
+
+## 局面库探针（`duel.probe`）
+
+`replay:` 是把对手的动作**逐帧重放**——棋盘三步就岔开，动作立刻非法，赢了也是假的。
+要看清「别人在那个局面下怎么走」，用探针：只取**某一回合的棋盘**，不续弈。
+
+```bash
+# 同一局面，我和它各走什么
+python -m duel.probe --games <game_id> --name xiaohui --snake py:..\hui\snake\snake.py \
+    --turns 60,120,180,220,233,236
+# 不指定回合时按 --every / --limit 抽样
+python -m duel.probe --games <id> --name soft --snake py:..\core.py --every 25
+```
+
+输出一张对照表（回合 / 我选 / 它选 / 我的合法性 / 落点后空间 我·它 / 到食物步数 我·它 / 判定），
+可 `--json out/probe.json`、`--md out/probe.md` 落盘。
+
+几个说法：
+
+- `--name` 是**回放里被我替换的那条蛇**，探针拿它在那一回合的棋盘，换成我的蛇来答。
+- 「它选」是从相邻两帧反推的（头部位移），不需要额外请求。
+- 合法性按**整条身体都是墙**判定（官方实测：尾巴也撞死），比 `duel/engine.py` 的尾巴让位口径更严。
+- 「一致率」不是好指标：同一局面常有多步等价棋。真正该看的是判定列——空间掉到 60% 以下、
+  或空间已经很紧却还要多走两步吃饭，才值得回看。
