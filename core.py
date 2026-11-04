@@ -101,12 +101,33 @@ def choose_move(board, me_name):
         if room < mylen + 2:
             # 进去就是死口袋：要早躲，别等到被围住才发现
             sc -= 8000
-        sc += min(room, mylen * 6) * 12
+        if room < mylen:
+            # 空间已经装不下自己：能少塞一点是一点，且越紧越该拉开差距
+            sc -= (mylen - room) * 120
+        sc += min(room, mylen * 6) * 28
 
-        # 3) 食物：越饿越想吃
+        # 2.5) 抢地盘：只压对面的活路，不主动贴脸（贴脸会把自己挤死）
+        if enemy_heads:
+            worst = None
+            for eh, elen in enemy_heads:
+                could = flood_size(eh, blk | {n}, w, h, cap=w * h)
+                if worst is None or could < worst:
+                    worst = could
+            sc += 12 * (room - worst)
+
+        # 3) 食物：活着优先，别为了变长把自己吃进死角
+        starving = health < 40
+        want_eat = starving or health < 70 or mylen < 15
         if n in food:
-            sc += 60 + (100 - health) * 1.2
-        elif food:
+            if starving:
+                sc += 200
+            elif want_eat:
+                sc += 60 + (100 - health) * 1.2
+            else:
+                sc += 20
+            if room < mylen + 6:
+                sc -= 300
+        elif food and want_eat:
             best_fd = min(abs(n[0] - f[0]) + abs(n[1] - f[1]) for f in food)
             sc -= best_fd * 1.5
 
@@ -122,7 +143,7 @@ def choose_move(board, me_name):
         if best is None or sc > best[0]:
             best = (sc, d)
 
-    if best is not None and best[0] > -5000:
+    if best is not None and best[0] > -50000:
         return best[1]
 
     # 真被围死了：先挑没被身体占住的、活得最久的那格；一格都没有才随便走
