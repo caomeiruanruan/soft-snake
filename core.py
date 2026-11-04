@@ -36,6 +36,24 @@ def flood_size(start, blocked, w, h, cap=200):
     return len(seen)
 
 
+def can_reach(start, target, blocked, w, h):
+    """BFS：从 start 能不能走到 target。target 允许当终点进（即使它在 blocked 里）。"""
+    if start == target:
+        return True
+    seen = {start}
+    stack = [start]
+    while stack:
+        c = stack.pop()
+        for _, n in neighbors(c, w, h):
+            if n == target:
+                return True
+            if n in seen or n in blocked:
+                continue
+            seen.add(n)
+            stack.append(n)
+    return False
+
+
 def choose_move(board, me_name):
     w, h = board["width"], board["height"]
     snakes = board["snakes"]
@@ -108,6 +126,12 @@ def choose_move(board, me_name):
             sc -= (mylen - room) * 120
         sc += min(room, mylen * 6) * 28
 
+        # 2.2) 能不能回到自己的尾巴：能回到尾巴 => 永远有退路；回不到 => 这步把自己关死了
+        #      310 回合那局的教训：flood_size 说还剩 84 格，但那 84 格里没有一条路能通到尾巴。
+        if my_tail and n != my_tail:
+            if not can_reach(n, my_tail, blk | {n}, w, h):
+                sc -= 3000
+
         # 2.5) 抢地盘：只压对面的活路，不主动贴脸（贴脸会把自己挤死）
         if enemy_heads:
             worst = None
@@ -136,6 +160,10 @@ def choose_move(board, me_name):
                         worst_my = best_after
             if worst_my < room:
                 sc -= (room - worst_my) * 18
+            # 她一步就能把我的空间压到装不下我 —— 这就是"门在她手里"，和死口袋同级
+            # 310 回合那局：turn 307 还有 85 格，她一手走完只剩 2 格，只罚 1494 分，太轻。
+            if worst_my < mylen + 2:
+                sc -= 20000
 
         # 2.6) 别钻死胡同：走进去只有一两个出口的格子，长身子进去就出不来
         open_nb = 0
