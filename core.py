@@ -115,9 +115,19 @@ def choose_move(board, me_name):
                     worst = could
             sc += 12 * (room - worst)
 
+        # 2.6) 别钻死胡同：走进去只有一两个出口的格子，长身子进去就出不来
+        open_nb = 0
+        for _, q in neighbors(n, w, h):
+            if q not in blk:
+                open_nb += 1
+        if open_nb <= 1:
+            sc -= 1500
+        elif open_nb == 2:
+            sc -= 150
+
         # 3) 食物：活着优先，别为了变长把自己吃进死角
         starving = health < 40
-        want_eat = starving or health < 70 or mylen < 15
+        want_eat = starving or health < 80 or mylen < 12
         if n in food:
             if starving:
                 sc += 200
