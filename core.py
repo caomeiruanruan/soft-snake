@@ -117,6 +117,19 @@ def choose_move(board, me_name):
                     worst = could
             sc += 12 * (room - worst)
 
+        # 2.4) 预读一层：我踩上 n 之后，对面最狠的那一步能把我的活路压到多少
+        if enemy_heads:
+            worst_my = room
+            for eh, elen in enemy_heads:
+                for _, m in neighbors(eh, w, h):
+                    if m in blk or m == n:
+                        continue
+                    r2 = flood_size(n, blk | {n, m}, w, h, cap=w * h)
+                    if r2 < worst_my:
+                        worst_my = r2
+            if worst_my < room:
+                sc -= (room - worst_my) * 18
+
         # 2.6) 别钻死胡同：走进去只有一两个出口的格子，长身子进去就出不来
         open_nb = 0
         for _, q in neighbors(n, w, h):
