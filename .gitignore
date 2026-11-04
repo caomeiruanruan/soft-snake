@@ -12,3 +12,4 @@ gh_core.py.json
 gh_server.py.json
 remote_core.py
 *.bak
+core.py.bak*
