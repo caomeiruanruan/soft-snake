@@ -124,9 +124,16 @@ def choose_move(board, me_name):
                 for _, m in neighbors(eh, w, h):
                     if m in blk or m == n:
                         continue
-                    r2 = flood_size(n, blk | {n, m}, w, h, cap=w * h)
-                    if r2 < worst_my:
-                        worst_my = r2
+                    # 它走 m 之后，我最好的一步还能剩多少活路（真正的第 2 层）
+                    best_after = 0
+                    for _, k in neighbors(n, w, h):
+                        if k in blk or k == m or k == n:
+                            continue
+                        r3 = flood_size(k, blk | {n, m, k}, w, h, cap=w * h)
+                        if r3 > best_after:
+                            best_after = r3
+                    if best_after < worst_my:
+                        worst_my = best_after
             if worst_my < room:
                 sc -= (room - worst_my) * 18
 
