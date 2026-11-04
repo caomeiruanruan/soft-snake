@@ -92,15 +92,17 @@ def choose_move(board, me_name):
         sc = 0.0
 
         # 1) 撞头风险：贴脸（相距 1）或者对面一步能冲进这一格，都算
+        #    用"很大但可比较"的罚分，而不是绝对禁止——否则一旦所有走法都危险，
+        #    就会掉进兜底分支、连空间都不看地乱撞（实测 self 死从 5 涨到 10）。
         for eh, elen in enemy_heads:
             if elen >= mylen and (abs(eh[0] - n[0]) + abs(eh[1] - n[1]) <= 1 or n in enemy_reach):
-                sc -= 100000
+                sc -= 6000 + 300 * (elen - mylen)
 
         # 2) 空间：走进去还剩多少格可活
         room = flood_size(n, blk | {n}, w, h, cap=w * h)
         if room < mylen + 2:
             # 进去就是死口袋：要早躲，别等到被围住才发现
-            sc -= 8000
+            sc -= 20000
         if room < mylen:
             # 空间已经装不下自己：能少塞一点是一点，且越紧越该拉开差距
             sc -= (mylen - room) * 120
@@ -153,14 +155,24 @@ def choose_move(board, me_name):
         if best is None or sc > best[0]:
             best = (sc, d)
 
+    def _head_collision(p):
+        """这一格会不会撞上能赢我的头（同长也算死）。"""
+        for eh, elen in enemy_heads:
+            if elen >= mylen and (abs(eh[0] - p[0]) + abs(eh[1] - p[1]) <= 1 or p in enemy_reach):
+                return True
+        return False
+
     if best is not None and best[0] > -50000:
         return best[1]
 
-    # 真被围死了：先挑没被身体占住的、活得最久的那格；一格都没有才随便走
-    free_moves = [(d, n) for d, n in neighbors(head, w, h) if n not in blocked_free]
+    # 真被围死 / 所有走法都危险：先挑不撞头的，再挑不撞身的，最后才按空间挑
+    cands = list(neighbors(head, w, h))
+    no_head = [(d, n) for d, n in cands if not _head_collision(n)]
+    free_moves = [(d, n) for d, n in no_head if n not in blocked_free]
     if free_moves:
         return max(free_moves, key=lambda t: flood_size(t[1], blocked_free | {t[1]}, w, h, cap=w * h))[0]
-    any_moves = [d for d, _ in neighbors(head, w, h)]
-    if any_moves:
-        return random.choice(any_moves)
+    if no_head:
+        return max(no_head, key=lambda t: flood_size(t[1], blocked_free | {t[1]}, w, h, cap=w * h))[0]
+    if cands:
+        return random.choice([d for d, _ in cands])
     return "up"
