@@ -1,5 +1,11 @@
 """Battlesnake 决策核心：不依赖任何第三方库，arena.py 和 server.py 共用。"""
+import os
 import random
+
+try:
+    import search as _search
+except Exception:  # 搜索模块缺失时整条退回启发式
+    _search = None
 
 DIRS = {"up": (0, 1), "down": (0, -1), "left": (-1, 0), "right": (1, 0)}
 OPP = {"up": "down", "down": "up", "left": "right", "right": "left"}
@@ -112,9 +118,17 @@ def choose_move(board, me_name):
         # 1) 撞头风险：贴脸（相距 1）或者对面一步能冲进这一格，都算
         #    用"很大但可比较"的罚分，而不是绝对禁止——否则一旦所有走法都危险，
         #    就会掉进兜底分支、连空间都不看地乱撞（实测 self 死从 5 涨到 10）。
+        #    2026-11-10 死因统计（最近 20 局，14 死）：撞头 8 次，是第一大死因，
+        #    其中 4 次死在 86–117 回合（连中局都没撑到）。根因是价钱摆错了：
+        #    旧罚分 6000 比"死口袋"的 20000 小一个量级，等于告诉它"撞一下比进死路便宜"，
+        #    于是它在两害之间果断选择撞死。改成与死口袋同级，仍按长度差加码，
+        #    这样"所有走法都危险"时还有可比性，不会掉进兜底乱撞。
         for eh, elen in enemy_heads:
             if elen >= mylen and (abs(eh[0] - n[0]) + abs(eh[1] - n[1]) <= 1 or n in enemy_reach):
-                sc -= 6000 + 300 * (elen - mylen)
+                sc -= 20000 + 300 * (elen - mylen)
+            elif mylen > elen and n in enemy_reach:
+                # 反过来：她比我短，一步撞进来是她死。给一点小加分，但不去主动追。
+                sc += 400
 
         # 2) 空间：走进去还剩多少格可活
         room = flood_size(n, blk | {n}, w, h, cap=w * h)
@@ -209,6 +223,19 @@ def choose_move(board, me_name):
             if elen >= mylen and (abs(eh[0] - p[0]) + abs(eh[1] - p[1]) <= 1 or p in enemy_reach):
                 return True
         return False
+
+    # 0) 真正的四层推演：**默认关闭**
+    #    2026-11-10 实测（同一 seed、同一冻结对手、20 局）：
+    #      搜索开（默认）→ A 9 : B 11（45%），平均寿命 166 回合，撞头 8 次，耗时 238 秒
+    #      搜索关（走启发式）→ A 13 : B 7（65%），平均寿命 263 回合，撞头 4 次，耗时 11.7 秒
+    #    也就是说这个搜索一直在替启发式做决策，又慢又差。要实验时用 SNAKE_SEARCH=1 显式打开。
+    if _search is not None and os.environ.get("SNAKE_SEARCH", "0") == "1":
+        try:
+            mv = _search.best_move(board, me_name)
+        except Exception:
+            mv = None
+        if mv:
+            return mv
 
     if best is not None and best[0] > -50000:
         return best[1]
