@@ -98,7 +98,14 @@ def choose_move(board, me_name):
     # 引擎判 self-collision —— 即使下一回合尾巴会腾开也一样。
     # 所以两套一律把整条身体当墙，绝不钻自己，尾巴也不例外。
     blocked = set(all_cells)
+    # 2026-11-13 修正（推翻 2026-11-03 那个「尾巴一律当墙」的结论）：
+    # 引擎规则是「本回合不吃东西时，尾巴会让开」，所以尾巴那一格本来是合法的。
+    # 上次把它当墙，代价是"自己把自己盘成结"：最近 20 局 self-collision 5 次、
+    # 突然关门 10 次，一大半是在角落被自己的尾巴堵死、明明有一步可走却判无路。
+    # 现在按规则放开：不吃东西 → 尾巴那格可进；要吃东西 → 尾巴不动，仍算墙。
     blocked_free = set(all_cells)
+    if my_tail:
+        blocked_free.discard(my_tail)
 
     # 对面下一回合能到的格子 → 那一格里，能过来的最长的是谁
     enemy_reach = {}
